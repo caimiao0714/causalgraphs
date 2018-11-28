@@ -1,0 +1,419 @@
+---
+title: "A notebook of animated causal graphs"
+output:
+  html_document:
+    theme: readable
+    df_print: paged
+    toc: true
+    toc_float: true
+    number_sections: true
+    code_folding: hide
+    highlight: tango
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache = T, warning = F, message = F)
+```
+
+# Controlling for a third variable Z
+
+```{r dataZ}
+library(tidyverse)
+library(gganimate)
+library(ggthemes)
+
+df <- data.frame(W = as.integer((1:200>100))) %>%
+  mutate(X = .5+2*W + rnorm(200)) %>%
+  mutate(Y = -.5*X + 4*W + 1 + rnorm(200),time="1") %>%
+  group_by(W) %>%
+  mutate(mean_X=mean(X),mean_Y=mean(Y)) %>%
+  ungroup()
+
+#Calculate correlations
+before_cor <- paste("1. Start with raw data. Correlation between X and Y: ",round(cor(df$X,df$Y),3),sep='')
+after_cor <- paste("6. Analyze what's left! Correlation between X and Y controlling for W: ",round(cor(df$X-df$mean_X,df$Y-df$mean_Y),3),sep='')
+
+#Add step 2 in which X is demeaned, and 3 in which both X and Y are, and 4 which just changes label
+dffull <- rbind(
+  #Step 1: Raw data only
+  df %>% mutate(mean_X=NA,mean_Y=NA,time=before_cor),
+  #Step 2: Add x-lines
+  df %>% mutate(mean_Y=NA,time='2. Figure out what differences in X are explained by W'),
+  #Step 3: X de-meaned 
+  df %>% mutate(X = X - mean_X,mean_X=0,mean_Y=NA,time="3. Remove differences in X explained by W"),
+  #Step 4: Remove X lines, add Y
+  df %>% mutate(X = X - mean_X,mean_X=NA,time="4. Figure out what differences in Y are explained by W"),
+  #Step 5: Y de-meaned
+  df %>% mutate(X = X - mean_X,Y = Y - mean_Y,mean_X=NA,mean_Y=0,time="5. Remove differences in Y explained by W"),
+  #Step 6: Raw demeaned data only
+  df %>% mutate(X = X - mean_X,Y = Y - mean_Y,mean_X=NA,mean_Y=NA,time=after_cor))
+
+```
+
+# Steps for analyzing controlling for a third variable W
+
+1. Start with raw data. Correlation between X and Y,
+2. Figure out what differences in X are explained by W
+3. Remove differences in X explained by W
+4. Figure out what differences in Y are explained by W
+5. Remove differences in Y explained by W
+6. Analyze what's left! Correlation between X and Y controlling for W
+
+```{r plotZ}
+ggplot(dffull,aes(y=Y,x=X,color=as.factor(W)))+geom_point()+
+  geom_vline(aes(xintercept=mean_X,color=as.factor(W)))+
+  geom_hline(aes(yintercept=mean_Y,color=as.factor(W)))+
+  guides(color=guide_legend(title="W"))+
+  scale_color_colorblind()+
+  labs(title = 'The Relationship between Y and X, Controlling for a Binary Variable W \n{next_state}')+
+  transition_states(time,transition_length=c(6,16,6,16,6,6),state_length=c(50,22,12,22,12,50),wrap=FALSE)+
+  ease_aes('sine-in-out')+
+  exit_fade()+enter_fade()
+```
+
+# Fixed effects
+
+```{r Fixed}
+library(tidyverse)
+library(gganimate)
+library(ggthemes)
+
+df <- data.frame(Person = rep(1:4,50)) %>%
+  mutate(X = .5+.5*(Person-2.5) + rnorm(200)) %>%
+  mutate(Y = -.5*X + (Person-2.5) + 1 + rnorm(200),time="1") %>%
+  group_by(Person) %>%
+  mutate(mean_X=mean(X),mean_Y=mean(Y)) %>%
+  ungroup()
+
+#Calculate correlations
+before_cor <- paste("1. Start with raw data. Correlation between X and Y: ",round(cor(df$X,df$Y),3),sep='')
+after_cor <- paste("6. Analyze what's left! Within-Individual Correlation Between X and Y: ",round(cor(df$X-df$mean_X,df$Y-df$mean_Y),3),sep='')
+
+#Add step 2 in which X is demeaned, and 3 in which both X and Y are, and 4 which just changes label
+dffull <- rbind(
+  #Step 1: Raw data only
+  df %>% mutate(mean_X=NA,mean_Y=NA,time=before_cor),
+  #Step 2: Add x-lines
+  df %>% mutate(mean_Y=NA,time='2. Figure out any between-Individual differences in X'),
+  #Step 3: X de-meaned 
+  df %>% mutate(X = X - mean_X,mean_X=0,mean_Y=NA,time="3. Remove all between-Individual differences in X"),
+  #Step 4: Remove X lines, add Y
+  df %>% mutate(X = X - mean_X,mean_X=NA,time="4. Figure out any between-Individual differences in Y"),
+  #Step 5: Y de-meaned
+  df %>% mutate(X = X - mean_X,Y = Y - mean_Y,mean_X=NA,mean_Y=0,time="5. Remove all between-Individual differences in Y"),
+  #Step 6: Raw demeaned data only
+  df %>% mutate(X = X - mean_X,Y = Y - mean_Y,mean_X=NA,mean_Y=NA,time=after_cor))
+```
+
+## Steps for analyzing fixed effects
+
+1. Start with raw data. Correlation between X and Y
+2. Figure out any between-Individual differences in X
+3. Remove all between-Individual differences in X
+4. Figure out any between-Individual differences in Y
+5. Remove all between-Individual differences in Y
+6. Analyze what's left! Within-Individual Correlation Between X and Y
+
+```{r plotFixed}
+ggplot(dffull,aes(y=Y,x=X,color=as.factor(Person)))+geom_point()+
+  geom_vline(aes(xintercept=mean_X,color=as.factor(Person)))+
+  geom_hline(aes(yintercept=mean_Y,color=as.factor(Person)))+
+  guides(color=guide_legend(title="Individual"))+
+  scale_color_colorblind()+
+  labs(title = 'The Relationship between Y and X, with Individual Fixed Effects \n{next_state}')+
+  transition_states(time,transition_length=c(6,16,6,16,6,6),state_length=c(50,22,12,22,12,50),wrap=FALSE)+
+  ease_aes('sine-in-out')+
+  exit_fade()+enter_fade()
+```
+
+# Difference-in-difference (DID)
+
+```{r did}
+library(tidyverse)
+library(gganimate)
+library(ggthemes)
+
+df <- data.frame(Control = c(rep("Control",150),rep("Treatment",150)),
+                 Time=rep(c(rep("Before",75),rep("After",75)),2)) %>%
+  mutate(Y = 2+2*(Control=="Treatment")+1*(Time=="After") + 1.5*(Control=="Treatment")*(Time=="After")+rnorm(300),state="1",
+         xaxisTime = (Time == "Before") + 2*(Time == "After") + (runif(300)-.5)*.95) %>%
+  group_by(Control,Time) %>%
+  mutate(mean_Y=mean(Y)) %>%
+  ungroup()
+
+df$Time <- factor(df$Time,levels=c("Before","After"))
+
+#Create segments
+dfseg <- df %>%
+  group_by(Control,Time) %>%
+  summarize(mean_Y = mean(mean_Y)) %>%
+  ungroup()
+
+diff <- filter(dfseg,Time=='After',Control=='Control')$mean_Y[1] - filter(dfseg,Time=='Before',Control=='Control')$mean_Y[1]
+
+dffull <- rbind(
+  #Step 1: Raw data only
+  df %>% mutate(state='1. Start with raw data.'),
+  #Step 2: Add Y-lines
+  df %>% mutate(state='2. Figure out what differences in Y are explained by Treatment and/or Time.'),
+  #Step 3: Collapse to means
+  df %>% mutate(Y = mean_Y,state="3. Keep only what's explained by Treatment and/or Time."),
+  #Step 4: Display time effect
+  df %>% mutate(Y = mean_Y,state="4. See how Control changed over Time."),
+  #Step 5: Shift to remove time effect
+  df %>% mutate(Y = mean_Y 
+                - (Time=='After')*diff,
+                state="5. Remove the Before/After Control difference for both groups."),
+  #Step 6: Raw demeaned data only
+  df %>% mutate(Y = mean_Y 
+                - (Time=='After')*diff,
+                state='6. The remaining Before/After Treatment difference is the effect.'))
+
+```
+
+## Steps for analyzing DID
+
+1. Start with raw data
+2. Figure out what differences in Y are explained by Treatment and/or Time
+3. Keep only what's explained by Treatment and/or Time
+4. See how Control changed over Time
+5. Remove the Before/After Control difference for both groups
+6. The remaining Before/After Treatment difference is the effect
+
+```{r plotDID}
+ggplot(dffull,aes(y=Y,x=xaxisTime,color=as.factor(Control)))+geom_point()+
+  guides(color=guide_legend(title="Group"))+
+  geom_vline(aes(xintercept=1.5),linetype='dashed')+
+  scale_color_colorblind()+
+  scale_x_continuous(
+    breaks = c(1, 2),
+    label = c("Before Treatment", "After Treatment")
+  )+xlab("Time")+
+  #The four lines for the four means
+  geom_segment(aes(x=ifelse(state %in% c('2. Figure out what differences in Y are explained by Treatment and/or Time.',"3. Keep only what's explained by Treatment and/or Time."),
+                            .5,NA),
+                   xend=1.5,y=filter(dfseg,Time=='Before',Control=='Control')$mean_Y[1],
+                   yend=filter(dfseg,Time=='Before',Control=='Control')$mean_Y[1]),size=1,color='black')+
+  geom_segment(aes(x=ifelse(state %in% c('2. Figure out what differences in Y are explained by Treatment and/or Time.',"3. Keep only what's explained by Treatment and/or Time."),
+                            .5,NA),
+                   xend=1.5,y=filter(dfseg,Time=='Before',Control=='Treatment')$mean_Y[1],
+                   yend=filter(dfseg,Time=='Before',Control=='Treatment')$mean_Y[1]),size=1,color="#E69F00")+
+  geom_segment(aes(x=ifelse(state %in% c('2. Figure out what differences in Y are explained by Treatment and/or Time.',"3. Keep only what's explained by Treatment and/or Time."),
+                            1.5,NA),
+                   xend=2.5,y=filter(dfseg,Time=='After',Control=='Control')$mean_Y[1],
+                   yend=filter(dfseg,Time=='After',Control=='Control')$mean_Y[1]),size=1,color='black')+
+  geom_segment(aes(x=ifelse(state %in% c('2. Figure out what differences in Y are explained by Treatment and/or Time.',"3. Keep only what's explained by Treatment and/or Time."),
+                            1.5,NA),
+                   xend=2.5,y=filter(dfseg,Time=='After',Control=='Treatment')$mean_Y[1],
+                   yend=filter(dfseg,Time=='After',Control=='Treatment')$mean_Y[1]),size=1,color="#E69F00")+
+  #Line indicating treatment effect
+  geom_segment(aes(x=1.5,xend=1.5,
+                   y=ifelse(state=='6. The remaining Before/After Treatment difference is the effect.',
+                            filter(dfseg,Time=='After',Control=='Treatment')$mean_Y[1]-diff,NA),
+                   yend=filter(dfseg,Time=='Before',Control=='Treatment')$mean_Y[1]),size=1.5,color='blue')+
+  #Line indicating pre/post control difference
+  geom_segment(aes(x=1.5,xend=1.5,
+                   y=ifelse(state=="4. See how Control changed over Time.",
+                            filter(dfseg,Time=='After',Control=='Control')$mean_Y[1],
+                            ifelse(state=="5. Remove the Before/After Control difference for both groups.",
+                                   filter(dfseg,Time=='Before',Control=='Control')$mean_Y[1],NA)),
+                   yend=filter(dfseg,Time=='Before',Control=='Control')$mean_Y[1]),size=1.5,color='blue')+
+  labs(title = 'The Difference-in-Difference Effect of Treatment \n{next_state}')+
+  transition_states(state,transition_length=c(6,16,6,16,6,6),state_length=c(50,22,12,22,12,50),wrap=FALSE)+
+  ease_aes('sine-in-out')+
+  exit_fade()+enter_fade()
+```
+
+
+# Instrumental Variable (IV)
+
+```{r ivData}
+df <- data.frame(Z = as.integer(1:200>100),
+                 W = rnorm(200)) %>%
+  mutate(X = .5+2*W +2*Z+ rnorm(200)) %>%
+  mutate(Y = -X + 4*W + 1 + rnorm(200),time="1") %>%
+  group_by(Z) %>%
+  mutate(mean_X=mean(X),mean_Y=mean(Y),YL=NA,XL=NA) %>%
+  ungroup()
+
+#Calculate correlations
+before_cor <- paste("1. Start with raw data. Correlation between X and Y: ",round(cor(df$X,df$Y),3),sep='')
+afterlab <- '6. Draw a line between the points. The slope is the effect of X on Y.'
+
+dffull <- rbind(
+  #Step 1: Raw data only
+  df %>% mutate(mean_X=NA,mean_Y=NA,time=before_cor),
+  #Step 2: Add x-lines
+  df %>% mutate(mean_Y=NA,time='2. Figure out what differences in X are explained by Z'),
+  #Step 3: X de-meaned 
+  df %>% mutate(X = mean_X,mean_Y=NA,time="3. Remove everything in X not explained by Z"),
+  #Step 4: Remove X lines, add Y
+  df %>% mutate(X = mean_X,mean_X=NA,time="4. Figure out what differences in Y are explained by Z"),
+  #Step 5: Y de-meaned
+  df %>% mutate(X = mean_X,Y = mean_Y,mean_X=NA,time="5. Remove everything in Y not explained by Z"),
+  #Step 6: Raw demeaned data only
+  df %>% mutate(X =  mean_X,Y =mean_Y,mean_X=NA,mean_Y=NA,YL=mean_Y,XL=mean_X,time=afterlab))
+
+#Get line segments
+endpts <- df %>%
+  group_by(Z) %>%
+  summarize(mean_X=mean(mean_X),mean_Y=mean(mean_Y))
+```
+
+## Steps for analyzing IV
+
+1. Start with raw data. Correlation between X and Y
+2. Figure out what differences in X are explained by Z
+3. Remove everything in X not explained by Z
+4. Figure out what differences in Y are explained by Z
+5. Remove everything in Y not explained by Z
+6. Draw a line between the points. The slope is the effect of X on Y
+
+```{r plotIV}
+ggplot(dffull,aes(y=Y,x=X,color=as.factor(Z)))+geom_point()+
+  geom_vline(aes(xintercept=mean_X,color=as.factor(Z)))+
+  geom_hline(aes(yintercept=mean_Y,color=as.factor(Z)))+
+  guides(color=guide_legend(title="Z"))+
+  geom_segment(aes(x=ifelse(time==afterlab,endpts$mean_X[1],NA),
+                   y=endpts$mean_Y[1],xend=endpts$mean_X[2],
+                   yend=endpts$mean_Y[2]),size=1,color='blue')+
+  scale_color_colorblind()+
+  labs(title = 'The Relationship between Y and X, With Binary Z as an Instrumental Variable \n{next_state}')+
+  transition_states(time,transition_length=c(6,16,6,16,6,6),state_length=c(50,22,12,22,12,50),wrap=FALSE)+
+  ease_aes('sine-in-out')+
+  exit_fade()+enter_fade()
+```
+
+
+# Matching
+
+```{r matchData}
+library(tidyverse)
+library(gganimate)
+library(ggthemes)
+
+df <- data.frame(xaxisTime=runif(60),Treated=c(rep("Treated",5),rep("Control",55))) %>%
+  mutate(Y = 3+.4*xaxisTime+1*(Treated=="Treated")+rnorm(60),
+         state="1")
+
+#Make sure the treated obs aren't too close together, that makes it confusing
+df[df$Treated=="Treated",]$xaxisTime <- c(1:5/6)+(runif(5)-.5)*.1
+
+caliper <- .02
+
+df <- df %>%
+  mutate(bins = c(rep(filter(df,Treated=="Treated")$xaxisTime-caliper,6),
+                  rep(filter(df,Treated=="Treated")$xaxisTime+caliper,6))) %>%
+  #There has to be a less clunky way to do this
+  rowwise() %>%
+  mutate(matchmeas = min(abs(xaxisTime-filter(df,Treated=="Treated")$xaxisTime))) %>%
+  mutate(match = matchmeas < caliper) %>%
+  group_by(Treated,match) %>%
+  mutate(mean_Y = ifelse(match==1,mean(Y),NA)) %>%
+  ungroup()
+
+
+#Check how many matches we have before proceeding; regenerate randomized data
+#until we have a decent number
+table(filter(df,Treated=="Control")$match)
+
+dffull <- rbind(
+  #Step 1: Raw data only
+  df %>% mutate(bins=NA,mean_Y=NA,state='1. Start with raw data.'),
+  #Step 2: Add Y-lines
+  df %>% mutate(mean_Y=NA,state='2. Look for Controls with similar X values to the Treatments.'),
+  #Step 3: Drop unmatch obs
+  df %>% mutate(Y = ifelse(match==1,Y,NA),mean_Y=NA,state="3. Keep Controls only if they're similar enough."),
+  #Step 4: Take means
+  df %>% mutate(Y = ifelse(match==1,Y,NA),bins=NA,state="4. Among what's kept, see what the treatment explains."),
+  #Step 5: Eliminate everything but the means
+  df %>% mutate(Y = ifelse(match==1,mean_Y,NA),bins=NA,state="5. Ignore everything not explained by treatment."),
+  #Step 6: Get treatment effect
+  df %>% mutate(Y = NA,bins=NA,state="6. The treatment effect is the remaining difference."))
+```
+
+## Steps for analyzing matching
+
+1. Start with raw data
+2. Look for Controls with similar X values to the Treatments
+3. Keep Controls only if they're similar enough
+4. Among what's kept, see what the treatment explains
+5. Ignore everything not explained by treatment
+6. The treatment effect is the remaining difference
+
+```{r matchPlot}
+ggplot(dffull,aes(y=Y,x=xaxisTime,color=Treated,size=Treated))+geom_point()+
+  geom_vline(aes(xintercept=bins))+
+  geom_hline(aes(yintercept=mean_Y,color=Treated))+
+  geom_segment(aes(x=.5,xend=.5,
+                   y=ifelse(state=="6. The treatment effect is the remaining difference.",
+                            filter(df,Treated=="Treated")$mean_Y[1],NA),
+                   yend=filter(df,Treated=="Control",match==TRUE)$mean_Y[1]),size=1.5,color='blue')+
+  scale_color_colorblind()+
+  scale_size_manual(values=c(2,3))+xlab("X")+
+  guides(fill=guide_legend(title="Group"))+
+  labs(title = 'The Effect of Treatment on Y while Matching on X (with a caliper) \n{next_state}')+
+  transition_states(state,transition_length=c(12,16,16,16,16,16),state_length=c(50,36,30,30,30,50),wrap=FALSE)+
+  ease_aes('sine-in-out')+
+  exit_fade()+enter_fade()
+```
+
+
+# Regression Discontinuity Design (RDD)
+
+```{r dataRDD}
+df <- data.frame(xaxisTime=runif(300)*20) %>%
+  mutate(Y = .2*xaxisTime+3*(xaxisTime>10)-.1*xaxisTime*(xaxisTime>10)+rnorm(300),
+         state="1",
+         groupX=floor(xaxisTime)+.5,
+         groupLine=floor(xaxisTime),
+         cutLine=rep(c(9,11),150)) %>%
+  group_by(groupX) %>%
+  mutate(mean_Y=mean(Y)) %>%
+  ungroup() %>%
+  arrange(groupX)
+
+
+dffull <- rbind(
+  #Step 1: Raw data only
+  df %>% mutate(groupLine=NA,cutLine=NA,mean_Y=NA,state='1. Start with raw data.'),
+  #Step 2: Add Y-lines
+  df %>% mutate(cutLine=NA,state='2. Figure out what differences in Y are explained by the Running Variable.'),
+  #Step 3: Collapse to means
+  df %>% mutate(Y = mean_Y,state="3. Keep only what's explained by the Running Variable."),
+  #Step 4: Zoom in on just the cutoff
+  df %>% mutate(mean_Y = ifelse(xaxisTime > 9 & xaxisTime < 11,mean_Y,NA),Y=ifelse(xaxisTime > 9 & xaxisTime < 11,mean_Y,NA),groupLine=NA,state="4. Focus just on what happens around the cutoff."),
+  #Step 5: Show the effect
+  df %>% mutate(mean_Y = ifelse(xaxisTime > 9 & xaxisTime < 11,mean_Y,NA),Y=ifelse(xaxisTime > 9 & xaxisTime < 11,mean_Y,NA),groupLine=NA,state="5. The jump at the cutoff is the effect of treatment."))
+```
+
+## Steps for analyzing RDD
+
+1. Start with raw data
+2. Figure out what differences in Y are explained by the Running Variable
+3. Keep only what's explained by the Running Variable
+4. Focus just on what happens around the cutoff
+5. The jump at the cutoff is the effect of treatment
+
+
+```{r plotRDD}
+ggplot(dffull,aes(y=Y,x=xaxisTime))+geom_point()+
+  geom_vline(aes(xintercept=10),linetype='dashed')+
+  geom_point(aes(y=mean_Y,x=groupX),color="red",size=2)+
+  geom_vline(aes(xintercept=groupLine))+
+  geom_vline(aes(xintercept=cutLine))+
+  geom_segment(aes(x=10,xend=10,
+                   y=ifelse(state=='5. The jump at the cutoff is the effect of treatment.',
+                            filter(df,groupLine==9)$mean_Y[1],NA),
+                   yend=filter(df,groupLine==10)$mean_Y[1]),size=1.5,color='blue')+
+  scale_color_colorblind()+
+  scale_x_continuous(
+    breaks = c(5, 15),
+    label = c("Untreated", "Treated")
+  )+xlab("Running Variable")+
+  labs(title = 'The Effect of Treatment on Y using Regression Discontinuity \n{next_state}')+
+  transition_states(state,transition_length=c(6,16,6,16,6),state_length=c(50,22,12,22,50),wrap=FALSE)+
+  ease_aes('sine-in-out')+
+  exit_fade()+enter_fade()
+```
+
